@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 )
 
 type posting struct {
@@ -21,38 +25,63 @@ type posting struct {
 	Logo        string `json:"company_logo"`
 }
 
-func main() {
-	fmt.Println("Hello world!")
-	url := fmt.Sprintf("https://jobs.github.com/positions.json?description=&location=&page=2")
+func getJobs(url string) *http.Response { //Get jobs using a provided URL, then return them as *http.response
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal("Request went horribly wrong: ", err)
-		return
+		return nil
 	}
-
 	client := http.Client{}
 	reply, err := client.Do(req)
 	if err != nil {
 		log.Fatal("Reply went horribly wrong: ", err)
-		return
+		return nil
 	}
+	return reply
+}
 
-	var response []posting
-
-	body, err := ioutil.ReadAll(reply.Body)
-	if err != nil {
-		log.Fatal("Reading went horribly wrong: ", err)
+func createFile() io.Writer { //Create a text file "postings.txt" to write all our job listings to
+	outputFile, err := os.Create("postings.txt") //Create a 'postings.txt' file to write our data to
+	if err != nil {                              //handle file creation error
+		log.Fatal("There was a problem creating the file. ", err)
 	}
+	defer outputFile.Close()
+	return outputFile
+}
 
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		fmt.Println("Unmarshal function went horribly wrong: ", err)
-	}
-
+func writePostings(response []posting, outputFile io.Writer) { //Write provided postings array to provided text file
 	for i := 0; i < len(response); i++ {
 		fmt.Println("Title: ", response[i].Title)
 	}
+	for i := 0; i < len(response); i++ { //Print each posting and its data count to the text file
+		fmt.Fprintln(outputFile, "Title: ", response[i].Title)
+		//outputFile.Write(response[index], " : ", response[element])
+	}
+	fmt.Println("\nAttempted to write results to 'postings.txt'.") //Declare an attempt was made to write the file
+}
 
+func main() {
+	var response []posting  //Create array of postings
+	var data *http.Response //Create variable to hold JSON reply from Github
+	var ctr = 1
+	outputFile := createFile() //Create the text file for our answers
+	var res = 1
+	for res == 1 {
+		urlstring := "https://jobs.github.com/positions.json?description=&location=&page=" + strconv.Itoa(ctr)
+		ctr++
+		url := fmt.Sprintf(urlstring) //setup url
+		data = getJobs(url)
+		body, err := ioutil.ReadAll(data.Body)
+		if err != nil {
+			log.Fatal("Reading went horribly wrong: ", err)
+		}
+		err = json.Unmarshal(body, &response)
+		if err != nil {
+			fmt.Println("Unmarshal function went horribly wrong: ", err)
+		}
+		writePostings(response, outputFile)
+		cmp := []byte{91, 93} //This is the array that appears when no further data is incoming.
+		res = bytes.Compare(body, cmp)
+	}
 	fmt.Println("At the end.")
-
 }
