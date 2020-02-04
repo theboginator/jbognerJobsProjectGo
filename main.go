@@ -40,15 +40,6 @@ func getJobs(url string) *http.Response { //Get jobs using a provided URL, then 
 	return reply
 }
 
-func createFile() io.Writer { //Create a text file "postings.txt" to write all our job listings to
-	outputFile, err := os.Create("postings.txt") //Create a 'postings.txt' file to write our data to
-	if err != nil {                              //handle file creation error
-		log.Fatal("There was a problem creating the file. ", err)
-	}
-	defer outputFile.Close()
-	return outputFile
-}
-
 func writePostings(response []posting, outputFile io.Writer) { //Write provided postings array to provided text file
 	for i := 0; i < len(response); i++ {
 		fmt.Println("Title: ", response[i].Title)
@@ -64,7 +55,11 @@ func main() {
 	var response []posting  //Create array of postings
 	var data *http.Response //Create variable to hold JSON reply from Github
 	var ctr = 1
-	outputFile := createFile() //Create the text file for our answers
+	outputFile, err := os.Create("postings.txt") //Create a 'postings.txt' file to write our data to
+	if err != nil {                              //handle file creation error
+		log.Fatal("There was a problem creating the file. ", err)
+	}
+	defer outputFile.Close() //Create the text file for our answers
 	var res = 1
 	for res == 1 {
 		urlstring := "https://jobs.github.com/positions.json?description=&location=&page=" + strconv.Itoa(ctr)
