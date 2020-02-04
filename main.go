@@ -23,7 +23,7 @@ type posting struct {
 
 func main() {
 	fmt.Println("Hello world!")
-	url := fmt.Sprintf("https://jobs.github.com/positions.json?")
+	url := fmt.Sprintf("https://jobs.github.com/positions.json?description=&location=&page=2")
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal("Request went horribly wrong: ", err)
@@ -38,20 +38,15 @@ func main() {
 	}
 
 	var response []posting
-	/*
-		if err := json.NewDecoder(reply.Body).Decode(&response); err != nil {
-			log.Println("Decoding went horribly wrong: ", err)
-		}
-	*/
-	body, err := ioutil.ReadAll(reply.Body)
 
+	body, err := ioutil.ReadAll(reply.Body)
 	if err != nil {
-		panic(err)
+		log.Fatal("Reading went horribly wrong: ", err)
 	}
 
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		fmt.Println("error:", err)
+		fmt.Println("Unmarshal function went horribly wrong: ", err)
 	}
 
 	for i := 0; i < len(response); i++ {
