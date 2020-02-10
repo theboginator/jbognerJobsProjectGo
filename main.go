@@ -42,7 +42,8 @@ func insert_posting(database *sql.DB, job posting) { //Insert a job into the dat
 }
 
 func get_jobs(url string) *http.Response { //Get jobs using a provided URL, then return them as *http.response
-	req, err := http.NewRequest("GET", url, nil)
+	//I wonder if this should return a response and an error to really take advantage of go?
+req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal("Request went horribly wrong: ", err)
 		return nil
