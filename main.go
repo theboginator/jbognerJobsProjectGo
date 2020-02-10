@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,9 +11,11 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
-type posting struct {
+type posting struct { //Let's define a struct to hold jobs data
 	Id          string `json:"id"`
 	FullTime    string `json:"type"`
 	Url         string `json:"url"`
@@ -25,7 +28,20 @@ type posting struct {
 	Logo        string `json:"company_logo"`
 }
 
-func getJobs(url string) *http.Response { //Get jobs using a provided URL, then return them as *http.response
+func setup_database() *sql.DB { //Create the database
+	database, _ := sql.Open("sqlite3", "./nraboy.db")
+	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS jobsdata (id INTEGER PRIMARY KEY, fulltime TEXT, " +
+		"url TEXT, created TEXT, company TEXT, website TEXT, location TEXT, description TEXT)")
+	statement.Exec()
+	return database
+}
+
+func insert_posting(database *sql.DB, job posting) { //Insert a job into the database
+	statement, _ := database.Prepare("INSERT INTO jobsdata (fulltime, url, created, company, website, location, description) VALUES (?, ?, ?, ?, ?, ?, ?)")
+	statement.Exec("Nic", "Raboy") //TODO: Add sanitized db inputs here
+}
+
+func get_jobs(url string) *http.Response { //Get jobs using a provided URL, then return them as *http.response
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal("Request went horribly wrong: ", err)
@@ -40,7 +56,7 @@ func getJobs(url string) *http.Response { //Get jobs using a provided URL, then 
 	return reply
 }
 
-func writePostings(response []posting, outputFile io.Writer) { //Write provided postings array to provided text file
+func write_postings(response []posting, outputFile io.Writer) { //Write provided postings array to provided text file
 	for i := 0; i < len(response); i++ {
 		fmt.Println("Title: ", response[i].Title)
 	}
@@ -51,32 +67,41 @@ func writePostings(response []posting, outputFile io.Writer) { //Write provided 
 	fmt.Println("\nAttempted to write results to 'postings.txt'.") //Declare an attempt was made to write the file
 }
 
+func insert(database *sql.DB, job posting) {
+	statement, _ := database.Prepare("INSERT INTO people (firstname, lastname) VALUES (?, ?)")
+	statement.Exec("Nic", "Raboy")
+}
+
 func main() {
 	var response []posting  //Create array of postings
 	var data *http.Response //Create variable to hold JSON reply from Github
-	var ctr = 1
+	var ctr = 1             //This will be used to keep track of the page of responses
+
 	outputFile, err := os.Create("postings.txt") //Create a 'postings.txt' file to write our data to
 	if err != nil {                              //handle file creation error
 		log.Fatal("There was a problem creating the file. ", err)
 	}
-	defer outputFile.Close() //Create the text file for our answers
-	var res = 1
+	defer outputFile.Close() //Create the text file for our answers, and leave it open for the write function
+
+	jobsdb := setup_database() //Set up the jobs database
+
+	var res = 1 //Track whether we're done or not
 	for res == 1 {
-		urlstring := "https://jobs.github.com/positions.json?description=&location=&page=" + strconv.Itoa(ctr)
-		ctr++
-		url := fmt.Sprintf(urlstring) //setup url
-		data = getJobs(url)
-		body, err := ioutil.ReadAll(data.Body)
-		if err != nil {
+		urlstring := "https://jobs.github.com/positions.json?description=&location=&page=" + strconv.Itoa(ctr) //Generate the url with the right page number
+		ctr++                                                                                                  //Prep for the next page
+		url := fmt.Sprintf(urlstring)                                                                          //setup url
+		data = get_jobs(url)                                                                                   //Retrieve data from the API
+		body, err := ioutil.ReadAll(data.Body)                                                                 //Get the JSON from data
+		if err != nil {                                                                                        //Handle a fault
 			log.Fatal("Reading went horribly wrong: ", err)
 		}
-		err = json.Unmarshal(body, &response)
-		if err != nil {
+		err = json.Unmarshal(body, &response) //Translate the JSON into our struct
+		if err != nil {                       //Hande a fault
 			fmt.Println("Unmarshal function went horribly wrong: ", err)
 		}
-		writePostings(response, outputFile)
-		cmp := []byte{91, 93} //This is the array that appears when no further data is incoming.
-		res = bytes.Compare(body, cmp)
+		write_postings(response, outputFile) //Write the response data struct to our text file
+		cmp := []byte{91, 93}                //This is the array that appears when no further data is incoming
+		res = bytes.Compare(body, cmp)       //If we receive the "no further data" response, we're done
 	}
 	fmt.Println("At the end.")
 }
