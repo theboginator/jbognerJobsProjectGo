@@ -41,20 +41,20 @@ func insert_posting(database *sql.DB, job posting) { //Insert a job into the dat
 	statement.Exec("Nic", "Raboy") //TODO: Add sanitized db inputs here
 }
 
-func get_jobs(url string) *http.Response { //Get jobs using a provided URL, then return them as *http.response
+func get_jobs(url string) (*http.Response, error) { //Get jobs using a provided URL, then return them as *http.response
 	//I wonder if this should return a response and an error to really take advantage of go?
-req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal("Request went horribly wrong: ", err)
-		return nil
+		return nil, err
 	}
 	client := http.Client{}
 	reply, err := client.Do(req)
 	if err != nil {
 		log.Fatal("Reply went horribly wrong: ", err)
-		return nil
+		return nil, err
 	}
-	return reply
+	return reply, nil
 }
 
 func write_postings(response []posting, outputFile io.Writer) { //Write provided postings array to provided text file
@@ -91,9 +91,12 @@ func main() {
 		urlstring := "https://jobs.github.com/positions.json?description=&location=&page=" + strconv.Itoa(ctr) //Generate the url with the right page number
 		ctr++                                                                                                  //Prep for the next page
 		url := fmt.Sprintf(urlstring)                                                                          //setup url
-		data = get_jobs(url)                                                                                   //Retrieve data from the API
-		body, err := ioutil.ReadAll(data.Body)                                                                 //Get the JSON from data
-		if err != nil {                                                                                        //Handle a fault
+		data, err = get_jobs(url)                                                                              //Retrieve data from the API
+		if err != nil {
+			log.Fatal("Request went horribly wrong: ", err) //Handle a fault
+		}
+		body, err := ioutil.ReadAll(data.Body) //Get the JSON from data
+		if err != nil {                        //Handle a fault
 			log.Fatal("Reading went horribly wrong: ", err)
 		}
 		err = json.Unmarshal(body, &response) //Translate the JSON into our struct
