@@ -29,16 +29,18 @@ type posting struct { //Let's define a struct to hold jobs data
 }
 
 func setup_database() *sql.DB { //Create the database
-	database, _ := sql.Open("sqlite3", "./nraboy.db")
-	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS jobsdata (id INTEGER PRIMARY KEY, fulltime TEXT, " +
-		"url TEXT, created TEXT, company TEXT, website TEXT, location TEXT, description TEXT)")
+	database, _ := sql.Open("sqlite3", "./jobsdata.db")
+	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS jobsdata (id INTEGER PRIMARY KEY, fulltime TEXT, url TEXT, created TEXT, company TEXT, website TEXT, location TEXT, description TEXT)")
 	statement.Exec()
 	return database
 }
 
-func insert_posting(database *sql.DB, job posting) { //Insert a job into the database
-	statement, _ := database.Prepare("INSERT INTO jobsdata (fulltime, url, created, company, website, location, description) VALUES (?, ?, ?, ?, ?, ?, ?)")
-	statement.Exec("Nic", "Raboy") //TODO: Add sanitized db inputs here
+func insert_posting(database *sql.DB, job []posting) { //Insert a job into the database
+	for i := 0; i < len(job); i++ { //Print each posting and its data count to the text file
+		statement, _ := database.Prepare("INSERT INTO jobsdata (fulltime, url, created, company, website, location, description) VALUES (?, ?, ?, ?, ?, ?, ?)")
+		//TODO: Sanitize inputs before insertion
+		statement.Exec(job[i].FullTime, job[i].Url, job[i].CreatedAt, job[i].Company, job[i].Company_url, job[i].Location, job[i].Description)
+	}
 }
 
 func get_jobs(url string) (*http.Response, error) { //Get jobs using a provided URL, then return them as *http.response
@@ -66,11 +68,6 @@ func write_postings(response []posting, outputFile io.Writer) { //Write provided
 		//outputFile.Write(response[index], " : ", response[element])
 	}
 	fmt.Println("\nAttempted to write results to 'postings.txt'.") //Declare an attempt was made to write the file
-}
-
-func insert(database *sql.DB, job posting) {
-	statement, _ := database.Prepare("INSERT INTO people (firstname, lastname) VALUES (?, ?)")
-	statement.Exec("Nic", "Raboy")
 }
 
 func main() {
@@ -103,6 +100,7 @@ func main() {
 		if err != nil {                       //Hande a fault
 			fmt.Println("Unmarshal function went horribly wrong: ", err)
 		}
+		insert_posting(jobsdb, response)     //Write the responses for this page to the database
 		write_postings(response, outputFile) //Write the response data struct to our text file
 		cmp := []byte{91, 93}                //This is the array that appears when no further data is incoming
 		res = bytes.Compare(body, cmp)       //If we receive the "no further data" response, we're done
