@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,6 +27,48 @@ type posting struct { //Let's define a struct to hold jobs data
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Logo        string `json:"company_logo"`
+}
+
+type RSS struct {
+	XMLName xml.Name `xml:"rss"`
+	Text    string   `xml:",chardata"`
+	A10     string   `xml:"a10,attr"`
+	Version string   `xml:"version,attr"`
+	Channel struct {
+		Text        string `xml:",chardata"`
+		Os          string `xml:"os,attr"`
+		Title       string `xml:"title"`
+		Link        string `xml:"link"`
+		Description string `xml:"description"`
+		Image       struct {
+			Text  string `xml:",chardata"`
+			URL   string `xml:"url"`
+			Title string `xml:"title"`
+			Link  string `xml:"link"`
+		} `xml:"image"`
+		TotalResults string `xml:"totalResults"`
+		Item         []struct {
+			Text string `xml:",chardata"`
+			Guid struct {
+				Text        string `xml:",chardata"`
+				IsPermaLink string `xml:"isPermaLink,attr"`
+			} `xml:"guid"`
+			Link   string `xml:"link"`
+			Author struct {
+				Text string `xml:",chardata"`
+				Name string `xml:"name"`
+			} `xml:"author"`
+			Category    []string `xml:"category"`
+			Title       string   `xml:"title"`
+			Description string   `xml:"description"`
+			PubDate     string   `xml:"pubDate"`
+			Updated     string   `xml:"updated"`
+			Location    struct {
+				Text  string `xml:",chardata"`
+				Xmlns string `xml:"xmlns,attr"`
+			} `xml:"location"`
+		} `xml:"item"`
+	} `xml:"channel"`
 }
 
 func setup_database() *sql.DB { //Create the database
@@ -59,6 +102,21 @@ func get_jobs(url string) (*http.Response, error) { //Get jobs using a provided 
 	return reply, nil
 }
 
+func getContent(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("GET error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Read body: %v", err)
+	}
+
+	return data, nil
+}
+
 func write_postings(response []posting, outputFile io.Writer) { //Write provided postings array to provided text file
 	for i := 0; i < len(response); i++ {
 		fmt.Println("Title: ", response[i].Title)
@@ -68,6 +126,18 @@ func write_postings(response []posting, outputFile io.Writer) { //Write provided
 		//outputFile.Write(response[index], " : ", response[element])
 	}
 	fmt.Println("\nAttempted to write results to 'postings.txt'.") //Declare an attempt was made to write the file
+}
+
+func insert_stackposting(database *sql.DB, job RSS) { //Insert a job into the database
+	for i := range job.Channel.Item { //Print each posting and its data count to the text file
+		statement, _ := database.Prepare("INSERT INTO jobsdata (company, url, created, location, description) VALUES (?, ?, ?, ?, ?)")
+		//TODO: Sanitize inputs before insertion
+		_, err := statement.Exec(string(job.Channel.Item[i].Author.Name), string(job.Channel.Item[i].Link), string(job.Channel.Item[i].PubDate), string(job.Channel.Item[i].Location.Text), string(job.Channel.Item[i].Description))
+		if err != nil {
+			fmt.Errorf("Encountered error: %v", err)
+		}
+		fmt.Println("Tried inserting posting number: ", i)
+	}
 }
 
 func main() {
@@ -105,5 +175,20 @@ func main() {
 		cmp := []byte{91, 93}                //This is the array that appears when no further data is incoming
 		res = bytes.Compare(body, cmp)       //If we receive the "no further data" response, we're done
 	}
-	fmt.Println("At the end.")
+	fmt.Println("Time for stackoverflow jobs.")
+	stackdata, err := getContent("https://stackoverflow.com/jobs/feed")
+	if err != nil {
+		log.Printf("Failed to get XML: %v", err)
+	}
+	fmt.Println("Received XML:")
+	var posting RSS
+	err = xml.Unmarshal(stackdata, &posting)
+	if err != nil {
+		log.Printf("Big OOF while unmarshal is happening: %v", err)
+	}
+	for index := range posting.Channel.Item {
+		fmt.Println("Title: ", posting.Channel.Item[index].Title)
+	}
+	//jobsdb := setup_database() //Set up the jobs database
+	insert_stackposting(jobsdb, posting) //Write the responses for this page to the database
 }
