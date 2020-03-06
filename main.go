@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/gen2brain/dlgs"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -73,7 +74,7 @@ type RSS struct {
 
 func setup_database() *sql.DB { //Create the database
 	database, _ := sql.Open("sqlite3", "./jobsdata.db")
-	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS jobsdata (id INTEGER PRIMARY KEY, fulltime TEXT, url TEXT, created TEXT, company TEXT, website TEXT, location TEXT, description TEXT)")
+	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS jobsdata (id INTEGER PRIMARY KEY, fulltime TEXT, url TEXT, created TEXT, company TEXT, website TEXT, location TEXT, lat REAL, long REAL, description TEXT)")
 	statement.Exec()
 	return database
 }
@@ -136,7 +137,6 @@ func insert_stackposting(database *sql.DB, job RSS) { //Insert a job into the da
 		if err != nil {
 			fmt.Errorf("Encountered error: %v", err)
 		}
-		fmt.Println("Tried inserting posting number: ", i)
 	}
 }
 
@@ -191,4 +191,13 @@ func main() {
 	}
 	//jobsdb := setup_database() //Set up the jobs database
 	insert_stackposting(jobsdb, posting) //Write the responses for this page to the database
+	//TODO: Geocode DB entries
+	//TODO: Get list of all cities/states that exists db into array
+	_, _, err = dlgs.List("List", "Select item from list:", []string{"Bug", "New Feature", "Improvement"}) //This WILL get the list of available cities/countries for job narrowing
+	if err != nil {
+		panic(err)
+	}
+	//TODO: Take items returned from selection and then pull from database
+	//TODO: Take selected items and generate a .csv
+	//TODO: Call python code that will make plot from .csv
 }
